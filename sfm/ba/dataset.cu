@@ -27,6 +27,19 @@ namespace sfm {
 namespace ba {
 template <typename T> BADataset<T>::BADataset(const std::string &filename) {}
 
+template <typename T> BADataset<T>::BADataset(
+  const std::vector<BADataset<T>::Measurement> &measurements,
+  const std::vector<Eigen::Matrix<T, 3, 4>> &extrinsics,
+  const std::vector<Eigen::Vector3<T>> &intrinsics,
+  const std::vector<Eigen::Vector3<T>> &points):
+  m_measurements(measurements),
+  m_extrinsics(extrinsics),
+  m_intrinsics(intrinsics),
+  m_points(points),
+  m_num_extrinsics(extrinsics.size()),
+  m_num_intrinsics(intrinsics.size()),
+  m_num_points(points.size()) {}
+
 template <typename T>
 const std::vector<Eigen::Matrix<T, 3, 4>> &BADataset<T>::Extrinsics() const {
   return m_extrinsics;
@@ -40,6 +53,11 @@ const std::vector<Eigen::Vector3<T>> &BADataset<T>::Intrinsics() const {
 template <typename T>
 const std::vector<Eigen::Vector3<T>> &BADataset<T>::Points() const {
   return m_points;
+}
+
+template <typename T>
+const std::vector<T> &BADataset<T>::Scales() const {
+  return m_scales;
 }
 
 template <typename T>
@@ -61,10 +79,81 @@ template <typename T> int_t BADataset<T>::NumberOfPoints() const {
 }
 
 template <typename T>
+void BADataset<T>::Write(const std::string& filename, const std::vector<T>& scales)
+{
+    std::ofstream file(filename);
+    if (!file.is_open())
+    {
+        LOG(ERROR) << "Can not open " << filename << std::endl;
+        exit(-1);
+    }
+    file.precision(17);
+
+    file << m_extrinsics.size() << " " << m_points.size() << " " << m_measurements.size() << std::endl;
+
+    for (const auto& measurement : m_measurements)
+    {
+        const double scale = scales[measurement.extrinsics_index];
+        file << measurement.extrinsics_index << " " << measurement.point_index << " " << -measurement.measurement[0] * scale << " " << -measurement.measurement[1] * scale << std::endl;
+    }
+
+    for (size_t i = 0; i < m_extrinsics.size(); i++)
+    {
+        Eigen::Vector3<T> rotation_vector;
+        Eigen::Matrix3<T> rotation_matrix = m_extrinsics[i].template leftCols<3>().transpose();
+        sfm::math::SO3::Log(rotation_matrix, rotation_vector);
+        Eigen::Vector3<T> translation = rotation_matrix * m_extrinsics[i].col(3);
+        file << rotation_vector(0) << std::endl; 
+        file << rotation_vector(1) << std::endl; 
+        file << rotation_vector(2) << std::endl; 
+        file << translation(0) << std::endl; 
+        file << translation(1) << std::endl;
+        file << translation(2) << std::endl;
+        file << m_intrinsics[i](0) * scales[i] << std::endl;
+        file << m_intrinsics[i](1) / scales[i] / scales[i] << std::endl;
+        file << m_intrinsics[i](2) / scales[i] / scales[i] / scales[i] / scales[i] << std::endl;
+    }
+
+    for (const auto& point : m_points)
+    {
+        file << -point(0) << "\n" << -point(1) << "\n" << -point(2) << std::endl;
+    }
+
+    file.close();
+}
+
+template <typename T>
+void BADataset<T>::Normalize()
+{
+  Eigen::Vector3<T> mean_center(0, 0, 0);
+  for (const auto& extrinsic : m_extrinsics)
+  {
+    mean_center += extrinsic.col(3);
+  }
+  mean_center /= m_extrinsics.size();
+
+  for (auto& extrinsic : m_extrinsics)
+  {
+    extrinsic.col(3) -= mean_center;
+  }
+  for (auto& point : m_points)
+  {
+    point -= mean_center;
+  }
+}
+
+template <typename T>
 BALDataset<T>::BALDataset(const std::string &filename, bool verbose)
     : BADataset<T>(filename) {
   this->Read(filename, verbose);
 }
+
+template <typename T> BALDataset<T>::BALDataset(
+  const std::vector<typename BADataset<T>::Measurement> &measurements,
+  const std::vector<Eigen::Matrix<T, 3, 4>> &extrinsics,
+  const std::vector<Eigen::Vector3<T>> &intrinsics,
+  const std::vector<Eigen::Vector3<T>> &points):
+  BADataset<T>(measurements, extrinsics, intrinsics, points) {}
 
 template <typename T>
 void BALDataset<T>::Read(const std::string &filename, bool verbose) {
@@ -160,6 +249,11 @@ void BALDataset<T>::Read(const std::string &filename, bool verbose) {
 
   if (verbose) {
     printf("Load points %d of %d...       \n", num_points, num_points);
+  }
+
+  for (const auto& intrinsic : m_intrinsics)
+  {
+    m_scales.push_back(intrinsic[0]);
   }
 
   for (auto &measurement : m_measurements) {

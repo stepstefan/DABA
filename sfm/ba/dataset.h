@@ -23,6 +23,10 @@ public:
   };
 
   BADataset(const std::string &filename);
+  BADataset(const std::vector<Measurement> &measurements,
+            const std::vector<Eigen::Matrix<T, 3, 4>> &extrinsics,
+            const std::vector<Eigen::Vector3<T>> &intrinsics,
+            const std::vector<Eigen::Vector3<T>> &points);
 
   int_t NumberOfExtrinsics() const;
   int_t NumberOfIntrinsics() const;
@@ -32,8 +36,11 @@ public:
   const std::vector<Eigen::Vector3<T>> &Intrinsics() const;
   const std::vector<Eigen::Vector3<T>> &Points() const;
   const std::vector<Measurement> &Measurements() const;
+  const std::vector<T>& Scales() const;
 
   virtual void Read(const std::string &filename, bool verbose = false) = 0;
+  void Write(const std::string& filename, const std::vector<T>& scales);
+  void Normalize();
 
 protected:
   std::vector<Measurement> m_measurements;
@@ -43,14 +50,19 @@ protected:
   std::vector<Eigen::Matrix<T, 3, 4>> m_extrinsics;
   std::vector<Eigen::Vector3<T>> m_intrinsics;
   std::vector<Eigen::Vector3<T>> m_points;
+  std::vector<T> m_scales;
 };
 
 template <typename T> class BALDataset : public BADataset<T> {
-public:
-  BALDataset(const std::string &filename, bool verbose = false);
-  virtual void Read(const std::string &filename, bool verbose = false) override;
+ public:
+  explicit BALDataset(const std::string &filename, bool verbose = false);
+  explicit BALDataset(const std::vector<typename BADataset<T>::Measurement> &measurements,
+            const std::vector<Eigen::Matrix<T, 3, 4>> &extrinsics,
+            const std::vector<Eigen::Vector3<T>> &intrinsics,
+            const std::vector<Eigen::Vector3<T>> &points);
+  void Read(const std::string &filename, bool verbose = false) override;
 
-protected:
+ protected:
   using BADataset<T>::m_measurements;
   using BADataset<T>::m_num_extrinsics;
   using BADataset<T>::m_num_intrinsics;
@@ -58,6 +70,7 @@ protected:
   using BADataset<T>::m_extrinsics;
   using BADataset<T>::m_intrinsics;
   using BADataset<T>::m_points;
+  using BADataset<T>::m_scales;
 };
 
 template <typename T> class BundlerDataset : public BADataset<T> {
