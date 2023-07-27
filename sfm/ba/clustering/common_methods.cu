@@ -20,14 +20,15 @@ namespace ba {
 namespace clustering {
 template <typename Size, typename Vertex>
 void SimplifyClusters(const sfm::graph::Handle &handle, Vertex *clusters,
-                      Size number_of_vertices, Size &number_of_clusters) {
-  thrust::device_vector<unsigned short> cluster_counts_v(number_of_clusters, 0);
+                      Size number_of_vertices, Size &number_of_clusters)
+{
+  thrust::device_vector<unsigned int> cluster_counts_v(number_of_clusters, 0);
   thrust::for_each(handle.GetThrustPolicy(), clusters,
                    clusters + number_of_vertices,
                    [cluster_counts = cluster_counts_v.data().get()] __device__(
                        auto cluster) {
-                     atomicCAS(cluster_counts + cluster, (unsigned short)0,
-                               (unsigned short)1);
+                     atomicCAS(cluster_counts + cluster, (unsigned int)0,
+                               (unsigned int)1);
                    });
 
   Size prev_number_of_clusters = number_of_clusters;
@@ -68,14 +69,15 @@ void SimplifyClusters(const sfm::graph::Handle &handle, Vertex *clusters,
 template <typename Size, typename Vertex, typename Score>
 void SimplifyClusters(const sfm::graph::Handle &handle, Vertex *clusters,
                       Size number_of_vertices, Score *cluster_scores,
-                      Size &number_of_clusters) {
-  thrust::device_vector<unsigned short> cluster_counts_v(number_of_clusters, 0);
+                      Size &number_of_clusters)
+{
+  thrust::device_vector<unsigned int> cluster_counts_v(number_of_clusters, 0);
   thrust::for_each(handle.GetThrustPolicy(), clusters,
                    clusters + number_of_vertices,
                    [cluster_counts = cluster_counts_v.data().get()] __device__(
                        auto cluster) {
-                     atomicCAS(cluster_counts + cluster, (unsigned short)0,
-                               (unsigned short)1);
+                     atomicCAS(cluster_counts + cluster, (unsigned int)0,
+                               (unsigned int)1);
                    });
 
   Size prev_number_of_clusters = number_of_clusters;

@@ -89,7 +89,8 @@ int BundlerDatasetToBALDataset(std::string bundler_file, std::string bal_file,
 
   points.resize(num_points);
   std::vector<std::vector<int>> camera_stats(num_cameras);
-  for (int_t n = 0; n < num_points; n++) {
+  for (int_t n = 0; n < num_points; n++)
+  {
     std::getline(infile, line);
     sstream.clear();
     sstream.str(line);
@@ -107,7 +108,8 @@ int BundlerDatasetToBALDataset(std::string bundler_file, std::string bal_file,
     int_t num_measurements;
     sstream >> num_measurements;
 
-    for (int_t m = 0; m < num_measurements; m++) {
+    for (int_t m = 0; m < num_measurements; m++)
+    {
       typename BADataset<T>::Measurement measurement;
       int_t camera_index, sift_key;
 
@@ -127,7 +129,8 @@ int BundlerDatasetToBALDataset(std::string bundler_file, std::string bal_file,
 
   T squared_error = 0;
 
-  for (int_t n = 0; n < num_cameras; n++) {
+  for (int_t n = 0; n < num_cameras; n++)
+  {
     const auto &R = rotations[n];
     const auto &t = cameras[n].segment<3>(3);
     Eigen::Vector3<T> dist;
@@ -136,7 +139,8 @@ int BundlerDatasetToBALDataset(std::string bundler_file, std::string bal_file,
     Eigen::Matrix3<T> H = Eigen::Matrix3<T>::Zero();
     Eigen::Vector3<T> g = Eigen::Vector3<T>::Zero();
 
-    for (const auto &index : camera_stats[n]) {
+    for (const auto &index : camera_stats[n])
+    {
       const auto &measurement = measurements[index];
       dist.noalias() = R * points[measurement.point_index] + t;
       feature = -dist.head<2>() / dist[2];

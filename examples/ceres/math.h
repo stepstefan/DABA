@@ -106,7 +106,7 @@ struct SO3 {
     Eigen::Vector<Scalar, 3> sine_axis{0.5 * (R(2, 1) - R(1, 2)),
                                        0.5 * (R(0, 2) - R(2, 0)),
                                        0.5 * (R(1, 0) - R(0, 1))};
-    Scalar cosine = 0.5 * (R.trace() - 1);
+    Scalar cosine = 0.5 * (R.trace() - Scalar(1.0));
     Scalar sine = sine_axis.stableNorm();
     Scalar theta = atan2(sine, cosine);
     Scalar theta2 = theta * theta;
