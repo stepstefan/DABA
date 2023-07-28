@@ -6,7 +6,9 @@
 #pragma once
 
 #include <ceres/ceres.h>
+#include <ceres/rotation.h>
 #include <examples/ceres/types.h>
+#include <examples/ceres/math.h>
 
 namespace Ceres {
 class ReprojectionError : public ceres::SizedCostFunction<3, 15, 3> {
@@ -108,4 +110,145 @@ private:
   Vector2 m_measurement;
   Scalar m_sqrt_weight;
 };
+
+struct AutoDiffReprojectionError
+{
+public:
+    AutoDiffReprojectionError(const Vector2 &measurement, Scalar sqrt_weight)
+      : m_measurement(measurement), m_sqrt_weight(sqrt_weight) {}
+
+    template <typename T>
+    bool operator()(
+        const T* const camera,
+        const T* const point_input,
+        T* residuals) const
+    {
+        Eigen::Map<const Eigen::Matrix<T, 3, 4>> extrinsics(camera);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> intrinsics(camera + 12);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> point(point_input);
+        Eigen::Map<Eigen::Matrix<T, 3, 1>> error(residuals);
+
+        const T delta = T(1e-6);
+        const T delta_squared = T(1e-12);
+
+        Eigen::Matrix<T, 3, 1> dist;
+        Eigen::Matrix<T, 3, 1> ray;
+        Eigen::Matrix<T, 3, 1> rotated_ray;
+
+        T radical_squared;
+        T error_squared_norm;
+        T dist_dot_rotated_ray;
+        T rescaled_dist_squared_norm_plus_delta_squared;
+        T sqrt_dist_squared_norm_plus_delta_squared;
+        T lambda;
+
+        radical_squared = T(m_measurement.squaredNorm());
+
+        ray[0] = T(m_measurement[0]);
+        ray[1] = T(m_measurement[1]);
+        ray[2] = intrinsics[0] + intrinsics[1] * radical_squared +
+                intrinsics[2] * radical_squared * radical_squared;
+        rotated_ray.noalias() = extrinsics.template leftCols<3>() * ray;
+
+        dist = point - extrinsics.col(3);
+        dist_dot_rotated_ray = dist.dot(rotated_ray);
+        rescaled_dist_squared_norm_plus_delta_squared =
+            dist.squaredNorm() + delta_squared;
+        sqrt_dist_squared_norm_plus_delta_squared =
+            sqrt(rescaled_dist_squared_norm_plus_delta_squared);
+        rescaled_dist_squared_norm_plus_delta_squared +=
+            delta * sqrt_dist_squared_norm_plus_delta_squared;
+        lambda = dist_dot_rotated_ray / rescaled_dist_squared_norm_plus_delta_squared;
+
+        error = rotated_ray;
+        error -=
+            lambda * dist;
+        error *= T(m_sqrt_weight);
+
+        return true;
+    }
+
+    // Factory to hide the construction of the CostFunction object from
+    // the client code.
+    static ceres::CostFunction* Create(const Vector2 &measurement, Scalar sqrt_weight)
+    {
+        return new ceres::AutoDiffCostFunction<AutoDiffReprojectionError, 3, 15, 3>(
+                        new AutoDiffReprojectionError(measurement, sqrt_weight));
+    }
+
+    Eigen::Vector2d m_measurement;
+    double m_sqrt_weight;
+};
+
 } // namespace Ceres
+
+// Templated pinhole camera model for used with Ceres.  The camera is
+// parameterized using 10 parameters. 4 for rotation, 3 for
+// translation, 1 for focal length and 2 for radial distortion. The
+// principal point is not modeled (i.e. it is assumed be located at
+// the image center).
+struct SnavelyReprojectionError
+{
+    // (u, v): the position of the observation with respect to the image
+    // center point.
+    SnavelyReprojectionError(
+        double observed_x,
+        double observed_y,
+        double weight):
+        observed_x(observed_x),
+        observed_y(observed_y),
+        weight(weight)
+    {}
+
+    template <typename T>
+    bool operator()(
+        const T* const camera,
+        const T* const point_input,
+        T* residuals) const
+    {
+        Eigen::Map<const Eigen::Matrix<T, 3, 4>> extrinsics(camera);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> intrinsics(camera + 12);
+        Eigen::Map<const Eigen::Matrix<T, 3, 1>> point(point_input);
+
+        Eigen::Matrix<T, 3, 1> p = extrinsics.template leftCols<3>().transpose() * (point - extrinsics.col(3));
+
+        // Noah Snavely's Bundler assumes, the camera coordinate system has a negative z axis.
+        // In dataset.cu measurement were negated so change of sign is not needed here.
+        const T xp = p[0] / p[2];
+        const T yp = p[1] / p[2];
+
+        // Apply second and fourth order radial distortion.
+        const T& k1 = intrinsics[1];
+        const T& k2 = intrinsics[2];
+        const T r2 = xp * xp + yp * yp;
+        const T distortion = 1.0 + r2 * (k1 + k2 * r2);
+
+        // Compute final projected point position.
+        const T& focal = intrinsics[0];
+        const T predicted_x = focal * distortion * xp;
+        const T predicted_y = focal * distortion * yp;
+
+        // The error is the difference between the predicted and observed position.
+        residuals[0] = predicted_x - observed_x;
+        residuals[1] = predicted_y - observed_y;
+        residuals[0] *= T(weight);
+        residuals[1] *= T(weight);
+
+        return true;
+    }
+
+    // Factory to hide the construction of the CostFunction object from
+    // the client code.
+    static ceres::CostFunction* Create(
+        const double observed_x,
+        const double observed_y,
+        const double weight )
+    {
+        return new ceres::AutoDiffCostFunction<SnavelyReprojectionError, 2, 15, 3>(
+                        new SnavelyReprojectionError(observed_x, observed_y, weight));
+    }
+
+    double observed_x;
+    double observed_y;
+    double weight;
+};
