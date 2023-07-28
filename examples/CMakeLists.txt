@@ -18,8 +18,13 @@ target_link_libraries(mem_comm_bal_dataset DSfM ExampleADMM ExampleDouglasRachfo
 if (CERES_FOUND)
     include_directories(${EIGEN3_INCLUDE_DIR})
     add_executable(ceres_bal_dataset ./ceres_bal_dataset.cpp)
+    add_executable(ceres_bal_dataset_snavely ./ceres_bal_dataset_snavely.cpp)
     target_link_libraries(ceres_bal_dataset DSfM ${CERES_LIBRARIES} ${Boost_LIBRARIES})
+    target_link_libraries(ceres_bal_dataset_snavely DSfM ${CERES_LIBRARIES} ${Boost_LIBRARIES})
 endif()
+
+add_executable(bundler_to_bal ./bundler_to_bal.cpp)
+target_link_libraries(bundler_to_bal DSfM ${Boost_LIBRARIES})
 
 add_subdirectory(./admm)
 add_subdirectory(./douglas_rachford)
