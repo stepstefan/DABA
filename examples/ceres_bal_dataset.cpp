@@ -13,6 +13,7 @@
 #include <iostream>
 #include <memory>
 #include <sfm/ba/dataset.h>
+#include <sfm/math/SO3.h>
 
 int main(int argc, char *argv[]) {
   google::InitGoogleLogging(argv[0]);
@@ -58,20 +59,26 @@ int main(int argc, char *argv[]) {
   std::cout << "-----------------------------------------------------------"
             << std::endl;
 
+  // Set all for ReprojectionError
   std::vector<Ceres::Matrix<3, 5>> cameras(extrinsics.size());
-  for (int i = 0; i < extrinsics.size(); i++) {
+  for (int i = 0; i < extrinsics.size(); i++)
+  {
     cameras[i].leftCols<4>() = extrinsics[i];
     cameras[i].col(4) = intrinsics[i];
   }
-
   std::vector<Ceres::Vector<3>> points = ba_dataset.Points();
 
   ceres::Problem problem;
   ceres::Manifold *manifold = new Ceres::Camera();
   ceres::LossFunction *loss = nullptr;
-  if (robust_loss_info == "huber") {
+  if (robust_loss_info == "huber")
+  {
     loss = new ceres::HuberLoss(32);
-  } else if (robust_loss_info == "trivial") {
+    std::cout << "Using huber loss function" << std::endl;
+  }
+  else
+  if (robust_loss_info == "trivial")
+  {
     loss = nullptr;
   } else {
     LOG(ERROR) << "The loss type can only be \"trivial\" and "
@@ -80,26 +87,16 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
-  std::vector<Ceres::ReprojectionError *> edges;
-
   for (const auto &measurement : measurements) {
     auto edge = new Ceres::ReprojectionError(measurement.measurement,
                                              measurement.sqrt_weight);
-    edges.push_back(edge);
+
+    // auto edge = Ceres::AutoDiffReprojectionError::Create(measurement.measurement,
+    //                                                      measurement.sqrt_weight);
+
     problem.AddResidualBlock(edge, loss,
-                             cameras[measurement.extrinsics_index].data(),
-                             points[measurement.point_index].data());
-  }
-
-  ceres::Problem::EvaluateOptions eval_options;
-  std::vector<double> gradients;
-
-  for (auto &camera : cameras) {
-    eval_options.parameter_blocks.push_back(camera.data());
-  }
-
-  for (auto &point : points) {
-    eval_options.parameter_blocks.push_back(point.data());
+      cameras[measurement.extrinsics_index].data(),
+      points[measurement.point_index].data());
   }
 
   for (auto &camera : cameras) {
@@ -113,31 +110,41 @@ int main(int argc, char *argv[]) {
       ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
   options.minimizer_progress_to_stdout = true;
   options.max_num_iterations = 40;
-  options.num_threads = 64;
+  options.num_threads = 8;
   options.parameter_tolerance = 0;
   options.function_tolerance = 0;
   options.gradient_tolerance = 0;
   options.max_solver_time_in_seconds = 14400;
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
-
   std::cout << summary.FullReport() << "\n";
-  std::string outfile = filename.substr(filename.rfind("problem-"));
-  outfile = outfile.substr(0, outfile.find(".txt"));
-  outfile = "ceres-" + robust_loss_info + "-" + outfile + ".txt";
 
-  std::ofstream fout(outfile);
+  std::vector<Eigen::Matrix<Ceres::Scalar, 3, 4>> optimized_extrinsics_merged;
+  std::vector<Eigen::Matrix<Ceres::Scalar, 3, 1>> optimized_intrinsics_merged;
+  std::vector<Eigen::Matrix<Ceres::Scalar, 3, 1>> optimized_points_merged;
 
-  double min_cost = summary.iterations[0].cost;
-  for (int n = 0; n < summary.iterations.size(); n++) {
-    const auto &iteration = summary.iterations[n];
-    min_cost = std::min(iteration.cost, min_cost);
-    fout << n << " " << min_cost << " " << iteration.cost << " "
-         << iteration.iteration_time_in_seconds << " "
-         << iteration.cumulative_time_in_seconds << std::endl;
+  for (const auto& camera : cameras)
+  { 
+    optimized_extrinsics_merged.push_back(camera.leftCols(4));
+    optimized_intrinsics_merged.push_back(camera.col(4));
   }
 
-  fout.close();
+  for (const auto& point : points)
+  {
+    optimized_points_merged.push_back(point);
+  }
+
+  sfm::ba::BALDataset<Ceres::Scalar> ba_optimized_dataset(
+    ba_dataset.Measurements(),
+    optimized_extrinsics_merged,
+    optimized_intrinsics_merged,
+    optimized_points_merged);
+  std::string outfile = filename.substr(filename.rfind("problem-"));
+  std::string dir_path = filename.substr(0, filename.rfind("problem-"));
+  outfile = outfile.substr(0, outfile.find(".txt"));
+  outfile = dir_path + "ceres-result-" + robust_loss_info + "-" + outfile + ".txt";
+
+  ba_optimized_dataset.Write(outfile, ba_dataset.Scales());
 
   return 0;
 }
