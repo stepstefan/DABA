@@ -93,8 +93,7 @@ void BADataset<T>::Write(const std::string& filename, const std::vector<T>& scal
 
     for (const auto& measurement : m_measurements)
     {
-        const double scale = scales[measurement.extrinsics_index];
-        file << measurement.extrinsics_index << " " << measurement.point_index << " " << -measurement.measurement[0] * scale << " " << -measurement.measurement[1] * scale << std::endl;
+        file << measurement.extrinsics_index << " " << measurement.point_index << " " << -measurement.measurement[0] << " " << -measurement.measurement[1] << std::endl;
     }
 
     for (size_t i = 0; i < m_extrinsics.size(); i++)
@@ -109,9 +108,9 @@ void BADataset<T>::Write(const std::string& filename, const std::vector<T>& scal
         file << translation(0) << std::endl; 
         file << translation(1) << std::endl;
         file << translation(2) << std::endl;
-        file << m_intrinsics[i](0) * scales[i] << std::endl;
-        file << m_intrinsics[i](1) / scales[i] / scales[i] << std::endl;
-        file << m_intrinsics[i](2) / scales[i] / scales[i] / scales[i] / scales[i] << std::endl;
+        file << m_intrinsics[i](0) << std::endl;
+        file << m_intrinsics[i](1) << std::endl;
+        file << m_intrinsics[i](2) << std::endl;
     }
 
     for (const auto& point : m_points)
@@ -190,8 +189,10 @@ void BALDataset<T>::Read(const std::string &filename, bool verbose) {
     double px, py;
     fscanf(pfile, "%d %d %lf %lf", &measurement.extrinsics_index,
            &measurement.point_index, &px, &py);
-    measurement.measurement[0] = px;
-    measurement.measurement[1] = py;
+
+    // Negate measurement coordinates to account for BAL/OpenGL negative z axis
+    measurement.measurement[0] = -px;
+    measurement.measurement[1] = -py;
     measurement.intrinsics_index = measurement.extrinsics_index;
     measurement.sqrt_weight = 1;
     m_measurements.push_back(measurement);
@@ -256,22 +257,35 @@ void BALDataset<T>::Read(const std::string &filename, bool verbose) {
     m_scales.push_back(intrinsic[0]);
   }
 
-  for (auto &measurement : m_measurements) {
-    const auto &intrinsic = m_intrinsics[measurement.intrinsics_index];
-    T rescale = intrinsic[0];
-    measurement.measurement /= -rescale;
-    measurement.sqrt_weight =
-        rescale * std::sqrt(measurement.measurement.squaredNorm() + 1);
-  }
+  // // DABA specific rescaling
+  // // 1. Rescale measurement coords and focal lengths so that f = 1
+  // // 2. Negate measurement coords to account for BAL negative z axis
+  // // 3. Rescale dist coefs from camera space to image space - INCOMPLETE
+  // //    This is not complete transformation as BAL uses colmap / opencv distortion model,
+  // //    while DABA (and DABA cost) uses Fitzgibbon one. These models are not interchangable!
+  // for (auto &measurement : m_measurements) {
+  //   const auto &intrinsic = m_intrinsics[measurement.intrinsics_index];
+  //   T rescale = intrinsic[0];
+  //   measurement.measurement /= rescale;
+  //   measurement.sqrt_weight =
+  //       rescale * std::sqrt(measurement.measurement.squaredNorm() + 1);
+  // }
 
-  for (auto &intrinsic : m_intrinsics) {
-    T rescale = intrinsic[0];
-    intrinsic[1] = intrinsic[1];
-    intrinsic[2] = intrinsic[2];
-    intrinsic[1] *= rescale * rescale;
-    intrinsic[2] *= rescale * rescale * rescale * rescale;
-    intrinsic[0] = intrinsic[0] / rescale;
-  }
+  // for (auto &intrinsic : m_intrinsics) {
+  //   T rescale = intrinsic[0];
+  //   intrinsic[1] = intrinsic[1];
+  //   intrinsic[2] = intrinsic[2];
+  //   intrinsic[1] *= rescale * rescale;
+  //   intrinsic[2] *= rescale * rescale * rescale * rescale;
+  //   intrinsic[0] = intrinsic[0] / rescale;
+  // }
+
+  // experiments
+  // for (auto &intrinsic : m_intrinsics)
+  // {
+  //   intrinsic[1] = 0;
+  //   intrinsic[2] = 0;
+  // }
 }
 
 template <typename T>
