@@ -237,7 +237,7 @@ int main(int argc, char *argv[]) {
                   << time_optim_max << "/" << std::setprecision(4) << std::fixed
                   << time << " seconds: " << std::scientific
                   << std::setprecision(25)
-                  << total_cost / ba_dataset->Measurements().size()
+                  << total_cost
                   << std::endl;
       }
       records.push_back({time_optim_max, time_optim_avg, time, total_cost});
@@ -291,26 +291,8 @@ int main(int argc, char *argv[]) {
               << time_optim_max << "/" << std::setprecision(4) << std::fixed
               << time << " seconds: " << std::scientific
               << std::setprecision(25)
-              << total_cost / ba_dataset->Measurements().size() << std::endl;
+              << total_cost << std::endl;
     records.push_back({time_optim_max, time_optim_avg, time, total_cost});
-    std::string outfile = dataset_file.substr(dataset_file.rfind("problem-"));
-    outfile = outfile.substr(0, outfile.find(".txt"));
-    outfile = "mm-" + trust_region_solver_info +
-              std::string(accelerated ? "-acc-" : "-unacc-") +
-              robust_loss_info + "-" + outfile + "-" +
-              std::to_string(num_ranks) + "-GPU-" + std::to_string(max_iters) +
-              "-iters.txt";
-
-    std::ofstream fout(outfile);
-    fout << ba_dataset->Extrinsics().size() << " "
-         << ba_dataset->Intrinsics().size() << " "
-         << ba_dataset->Points().size() << " "
-         << ba_dataset->Measurements().size() << std::endl;
-
-    for (int iter = 0; iter <= max_iters; iter++) {
-      fout << iter << " " << records[iter].transpose() << std::endl;
-    }
-    fout.close();
   } else {
     T send_data[2] = {cost, time_optim_n[rank]};
     MPI_Send(send_data, 2, sfm::traits<T>::MPI_FLOAT_TYPE, 0, 1,
@@ -377,35 +359,43 @@ int main(int argc, char *argv[]) {
                                                  points[rank].data());
       }
 
-      std::string outfile = dataset_file.substr(dataset_file.rfind("problem-"));
-      outfile = outfile.substr(0, outfile.find(".txt"));
-      outfile = "results-mm-" + trust_region_solver_info +
-                std::string(accelerated ? "-acc-" : "-unacc-") +
-                robust_loss_info + "-" + outfile + "-" +
-                std::to_string(num_ranks) + "-GPU-" +
-                std::to_string(max_iters) + "-iters.txt";
+      // std::string outfile = dataset_file.substr(dataset_file.rfind("problem-"));
+      // std::string dir_path = dataset_file.substr(0, dataset_file.rfind("problem-"));
+      // outfile = outfile.substr(0, outfile.find(".txt"));
+      // outfile = dir_path + "results-daba-" + trust_region_solver_info +
+      //           std::string(accelerated ? "-acc-" : "-unacc-") +
+      //           robust_loss_info + "-" + outfile + "-" +
+      //           std::to_string(num_ranks) + "-GPU-" +
+      //           std::to_string(max_iters) + "-iters.txt";
 
-      std::cout << "-----------------------------------------------------------"
-                << std::endl;
-      std::cout << "Save optimization results to " << outfile << std::endl;
-      std::ofstream fout(outfile);
-      fout << ba_dataset->Extrinsics().size() << " "
-           << ba_dataset->Intrinsics().size() << " "
-           << ba_dataset->Points().size() << " " << num_ranks << std::endl;
+      // std::cout << "-----------------------------------------------------------"
+      //           << std::endl;
+      // std::cout << "Save optimization results to " << outfile << std::endl;
+      // std::ofstream fout(outfile);
+      // fout << ba_dataset->Extrinsics().size() << " "
+      //      << ba_dataset->Intrinsics().size() << " "
+      //      << ba_dataset->Points().size() << " " << num_ranks << std::endl;
 
-      for (int_t rank = 0; rank < num_ranks; rank++) {
-        fout << problem_info[rank][0] << " " << problem_info[rank][1] << " "
-             << problem_info[rank][2] << std::endl;
-      }
+      // for (int_t rank = 0; rank < num_ranks; rank++)
+      // {
+      //   fout << problem_info[rank][0] << " " << problem_info[rank][1] << " "
+      //        << problem_info[rank][2] << std::endl;
+      // }
 
       int_t num_extrinsics = 0;
       int_t num_intrinsics = 0;
       int_t num_points = 0;
+      std::vector<Eigen::Matrix<T, 3, 4>> optimized_extrinsics_merged;
+      std::vector<Eigen::Matrix<T, 3, 1>> optimized_intrinsics_merged;
+      std::vector<Eigen::Matrix<T, 3, 1>> optimized_points_merged;
 
-      for (int_t rank = 0; rank < num_ranks; rank++) {
-        for (const auto &extrinsics_n : extrinsics[rank]) {
-          fout << std::scientific << std::setprecision(10) << extrinsics_n
-               << std::endl;
+      for (int_t rank = 0; rank < num_ranks; rank++)
+      {
+        for (const auto &extrinsics_n : extrinsics[rank])
+        {
+          // fout << std::scientific << std::setprecision(10) << extrinsics_n
+          //      << std::endl;
+          optimized_extrinsics_merged.push_back(extrinsics_n);
           num_extrinsics++;
         }
       }
@@ -417,8 +407,9 @@ int main(int argc, char *argv[]) {
 
       for (int_t rank = 0; rank < num_ranks; rank++) {
         for (const auto &intrinsics_n : intrinsics[rank]) {
-          fout << std::scientific << std::setprecision(10)
-               << intrinsics_n.transpose() << std::endl;
+          // fout << std::scientific << std::setprecision(10)
+          //      << intrinsics_n.transpose() << std::endl;
+          optimized_intrinsics_merged.push_back(intrinsics_n);
           num_intrinsics++;
         }
       }
@@ -430,8 +421,9 @@ int main(int argc, char *argv[]) {
 
       for (int_t rank = 0; rank < num_ranks; rank++) {
         for (const auto &points_n : points[rank]) {
-          fout << std::scientific << std::setprecision(10)
-               << points_n.transpose() << std::endl;
+          // fout << std::scientific << std::setprecision(10)
+          //      << points_n.transpose() << std::endl;
+          optimized_points_merged.push_back(points_n);
           num_points++;
         }
       }
@@ -440,7 +432,21 @@ int main(int argc, char *argv[]) {
         LOG(ERROR) << "Inconsistent points infomration." << std::endl;
         exit(-1);
       }
-    } else {
+
+      sfm::ba::BALDataset<T> ba_optimized_dataset(ba_dataset->Measurements(), optimized_extrinsics_merged, optimized_intrinsics_merged, optimized_points_merged);
+      std::string outfile = dataset_file.substr(dataset_file.rfind("problem-"));
+      std::string dir_path = dataset_file.substr(0, dataset_file.rfind("problem-"));
+      outfile = outfile.substr(0, outfile.find(".txt"));
+      outfile = dir_path + "daba-result-" + trust_region_solver_info +
+                std::string(accelerated ? "-acc-" : "-unacc-") +
+                robust_loss_info + "-" + outfile + "-" +
+                std::to_string(num_ranks) + "-GPU-" +
+                std::to_string(max_iters) + "-iters.txt";
+      
+      ba_optimized_dataset.Write(outfile, ba_dataset->Scales());
+    }
+    else
+    {
       // send extrinsics, intrinsics and points
       int_t num_extrinsics = d_extrinsics.size() / 12;
       int_t num_intrinsics = d_intrinsics.size() / 3;
