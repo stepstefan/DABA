@@ -40,8 +40,9 @@ EvaluateImpl(const Eigen::Matrix<T, 3, 4> &extrinsic,
       measurement[0] * measurement[0] + measurement[1] * measurement[1];
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_squared * radical_squared;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_squared * radical_squared;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
   dist = point - extrinsic.col(3);
@@ -93,8 +94,9 @@ __host__ __device__ __forceinline__ void LinearizeReprojectionLossFunctionImpl(
       measurement[0] * measurement[0] + measurement[1] * measurement[1];
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_squared * radical_squared;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_squared * radical_squared;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
   dist = point - extrinsic.col(3);
@@ -153,7 +155,8 @@ __host__ __device__ __forceinline__ void LinearizeReprojectionLossFunctionImpl(
                     (dist_squared_norm_plus_delta_squared_plus_its_sqrt)*dist;
   jac_int.col(0) *= rescaled_sqrt_weight;
   jac_int.col(1) = jac_int.col(0) * radical_squared;
-  jac_int.col(2) = jac_int.col(1) * radical_squared;
+  // jac_int.col(2) = jac_int.col(1) * radical_squared;
+  jac_int.col(2) = Eigen::Vector3<T>::Zero();
 }
 
 template <typename T>
@@ -172,8 +175,9 @@ EvaluateCameraSurrogateFunctionImpl(const Eigen::Matrix<T, 3, 4> &extrinsic,
       measurement[0] * measurement[0] + measurement[1] * measurement[1];
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_squared * radical_squared;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_squared * radical_squared;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
   error = rescaled_sqrt_weight * rotated_ray + rescaled_a * extrinsic.col(3) -
@@ -199,8 +203,9 @@ __host__ __device__ __forceinline__ void LinearizeCameraSurrogateFunctionImpl(
       measurement[0] * measurement[0] + measurement[1] * measurement[1];
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_squared * radical_squared;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_squared * radical_squared;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   ray_norm = ray.norm();
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
@@ -222,7 +227,8 @@ __host__ __device__ __forceinline__ void LinearizeCameraSurrogateFunctionImpl(
 
   jac_int.col(0) = SQRT_TWO * rescaled_sqrt_weight * extrinsic.col(2);
   jac_int.col(1) = radical_squared * jac_int.col(0);
-  jac_int.col(2) = radical_squared * jac_int.col(1);
+  // jac_int.col(2) = radical_squared * jac_int.col(1);
+  jac_int.col(2) = Eigen::Vector3<T>::Zero();
 }
 
 template <typename T>
@@ -277,8 +283,9 @@ __host__ __device__ __forceinline__ void MajorizeReprojectionLossFunctionImpl(
   rescaled_f_vec[4] = radical_fourth_order * radical_fourth_order;
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_fourth_order;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_fourth_order;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
   dist = point - extrinsic.col(3);
@@ -345,8 +352,9 @@ __host__ __device__ __forceinline__ void ConstructSurrogateFunctionImpl(
   T radical_fourth_order = radical_squared * radical_squared;
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_fourth_order;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_fourth_order;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
   dist = point - extrinsic.col(3);
@@ -405,8 +413,9 @@ __host__ __device__ __forceinline__ void ConstructSurrogateFunctionImpl(
   T radical_fourth_order = radical_squared * radical_squared;
 
   ray.template head<2>() = measurement;
-  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
-           intrinsic[2] * radical_fourth_order;
+  // ray[2] = intrinsic[0] + intrinsic[1] * radical_squared +
+  //          intrinsic[2] * radical_fourth_order;
+  ray[2] = intrinsic[0] + intrinsic[1] * radical_squared;
   rotated_ray.noalias() = extrinsic.template leftCols<3>() * ray;
 
   dist = point - extrinsic.col(3);
